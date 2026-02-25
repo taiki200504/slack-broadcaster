@@ -24,14 +24,16 @@ VERSION=$(echo "$DMG_URL" | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+')
 echo "Version: ${VERSION}"
 
 # Download
-TMPDIR=$(mktemp -d)
-DMG_PATH="${TMPDIR}/${APP_NAME}.dmg"
+WORK_DIR=$(mktemp -d)
+DMG_PATH="${WORK_DIR}/${APP_NAME}.dmg"
 echo "Downloading..."
 curl -L -# -o "$DMG_PATH" "$DMG_URL"
 
-# Mount DMG
+# Mount DMG to a known path
+MOUNT_POINT="${WORK_DIR}/dmg_mount"
+mkdir -p "$MOUNT_POINT"
 echo "Installing..."
-MOUNT_POINT=$(hdiutil attach "$DMG_PATH" -nobrowse -quiet | tail -1 | awk '{print $NF}')
+hdiutil attach "$DMG_PATH" -nobrowse -quiet -mountpoint "$MOUNT_POINT"
 
 # Copy to Applications (remove old version if exists)
 if [ -d "${INSTALL_DIR}/${APP_NAME}.app" ]; then
@@ -39,16 +41,14 @@ if [ -d "${INSTALL_DIR}/${APP_NAME}.app" ]; then
 fi
 cp -R "${MOUNT_POINT}/${APP_NAME}.app" "${INSTALL_DIR}/"
 
-# Unmount
+# Unmount & cleanup
 hdiutil detach "$MOUNT_POINT" -quiet
+rm -rf "$WORK_DIR"
 
 # Remove quarantine attribute (bypasses Gatekeeper)
 xattr -cr "${INSTALL_DIR}/${APP_NAME}.app"
 
-# Cleanup
-rm -rf "$TMPDIR"
-
 echo ""
-echo "Done! ${APP_NAME} ${VERSION} has been installed to ${INSTALL_DIR}."
+echo "Done! ${APP_NAME} ${VERSION} has been installed."
 echo "Opening ${APP_NAME}..."
 open "${INSTALL_DIR}/${APP_NAME}.app"
