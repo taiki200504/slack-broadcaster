@@ -11,38 +11,36 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    outputs:
-      release_id: ${{ steps.create.outputs.result }}
     steps:
       - uses: actions/checkout@v4
-      - name: Get version from tag
-        id: tag
-        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
       - name: Create Release
-        id: create
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data } = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: context.ref.replace('refs/tags/', ''),
-              name: `Slack Broadcaster ${context.ref.replace('refs/tags/', '')}`,
-              body: `## Slack Broadcaster ${context.ref.replace('refs/tags/', '')}\n\nDownload the file for your platform below.\n\n### macOS\nDownload the \`.dmg\` file, open it, and drag Slack Broadcaster to your Applications folder.\n\n**Important:** After opening the app for the first time, if you see a Gatekeeper warning, run this in Terminal:\n\`\`\`\nxattr -cr /Applications/Slack\\\\ Broadcaster.app\n\`\`\`\nThen open the app again.\n\n### Windows\nDownload and run the \`.msi\` installer.\n\n### Linux\nDownload the \`.deb\` or \`.AppImage\` file.`,
-              draft: false,
-              prerelease: false,
-            });
-            return data.upload_url;
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "Slack Broadcaster ${{ github.ref_name }}" \
+            --notes "$(cat <<'EOF'
+          ## Slack Broadcaster ${{ github.ref_name }}
+
+          各プラットフォームに対応したファイルをダウンロードしてください。
+
+          | Platform | File |
+          |----------|------|
+          | **macOS** (Apple Silicon / Intel) | `.dmg` |
+          | **Windows** | `.msi` |
+          | **Linux** | `.AppImage` |
+
+          ### macOS での初回起動
+          DMG を開き、アプリを Applications フォルダにドラッグ後、ターミナルで以下を実行してください:
+          ```
+          xattr -cr /Applications/Slack\ Broadcaster.app
+          ```
+          その後アプリを開いてください。
+          EOF
+          )"
 
   build-macos:
     needs: create-release
-    strategy:
-      matrix:
-        include:
-          - target: aarch64-apple-darwin
-            label: Apple Silicon
-          - target: x86_64-apple-darwin
-            label: Intel
     runs-on: macos-latest
     permissions:
       contents: write
@@ -58,12 +56,12 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Tauri app (${{ matrix.label }})
+      - name: Build Tauri app (universal)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,7 +72,15 @@ jobs:
           releaseBody: ""
           releaseDraft: false
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: --target universal-apple-darwin
+
+      - name: Remove updater artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for asset in $(gh release view "${{ github.ref_name }}" --json assets -q '.assets[].name' | grep -E '\.(tar\.gz|sig)$'); do
+            gh release delete-asset "${{ github.ref_name }}" "$asset" --yes
+          done
 
   build-windows:
     needs: create-release
@@ -106,6 +112,15 @@ jobs:
           releaseBody: ""
           releaseDraft: false
           prerelease: false
+
+      - name: Remove updater artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          for asset in $(gh release view "${{ github.ref_name }}" --json assets -q '.assets[].name' | grep -E '\.(nsis\.zip|sig)$'); do
+            gh release delete-asset "${{ github.ref_name }}" "$asset" --yes
+          done
 
   build-linux:
     needs: create-release
@@ -142,3 +157,11 @@ jobs:
           releaseBody: ""
           releaseDraft: false
           prerelease: false
+
+      - name: Keep only AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for asset in $(gh release view "${{ github.ref_name }}" --json assets -q '.assets[].name' | grep -E '\.(deb|rpm|tar\.gz|sig)$'); do
+            gh release delete-asset "${{ github.ref_name }}" "$asset" --yes
+          done
