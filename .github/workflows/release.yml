@@ -19,24 +19,33 @@ jobs:
         run: |
           gh release create "${{ github.ref_name }}" \
             --title "Slack Broadcaster ${{ github.ref_name }}" \
-            --notes "$(cat <<'EOF'
-          ## Slack Broadcaster ${{ github.ref_name }}
+            --notes "$(cat <<'NOTES'
+          ## Install
 
-          各プラットフォームに対応したファイルをダウンロードしてください。
-
-          | Platform | File |
-          |----------|------|
-          | **macOS** (Apple Silicon / Intel) | `.dmg` |
-          | **Windows** | `.msi` |
-          | **Linux** | `.AppImage` |
-
-          ### macOS での初回起動
-          DMG を開き、アプリを Applications フォルダにドラッグ後、ターミナルで以下を実行してください:
+          ### macOS (recommended)
+          Open Terminal and run:
           ```
-          xattr -cr /Applications/Slack\ Broadcaster.app
+          curl -fsSL https://raw.githubusercontent.com/taiki200504/slack-broadcaster/main/install.sh | bash
           ```
-          その後アプリを開いてください。
-          EOF
+          This downloads, installs, and opens the app automatically.
+
+          ### Windows
+          Download the `.msi` file below and run the installer.
+
+          ### Linux
+          Download the `.AppImage` file below.
+
+          ---
+
+          <details><summary>macOS manual install</summary>
+
+          1. Download the `.dmg` file below
+          2. Open the DMG and drag the app to Applications
+          3. Open Terminal and run: `xattr -cr /Applications/Slack\ Broadcaster.app`
+          4. Open the app
+
+          </details>
+          NOTES
           )"
 
   build-macos:
